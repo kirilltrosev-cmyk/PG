@@ -133,7 +133,7 @@ def request_bot_admin_chat_button(text: str, request_id: int, chat_is_channel: b
 def request_channel_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
-            [request_chat_button("Канал", REQUEST_CHANNEL_ID, True)],
+            [request_bot_admin_chat_button("Канал", REQUEST_CHANNEL_ID, True)],
             [rkb("Назад", "back")],
         ],
         resize_keyboard=True,
@@ -144,7 +144,7 @@ def request_channel_keyboard() -> ReplyKeyboardMarkup:
 def request_group_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
-            [request_chat_button("Группа", REQUEST_GROUP_ID, False)],
+            [request_bot_admin_chat_button("Группа", REQUEST_GROUP_ID, False)],
             [rkb("Назад", "back")],
         ],
         resize_keyboard=True,

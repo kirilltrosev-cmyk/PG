@@ -17,7 +17,11 @@ TEXTS = {
     "refs": f"{ce('referrals')} Referrals\n\nYour link:\n{{referral_link}}\n\n• Invited: {{referrals_count}}\n• Earned: {{referral_earned}} {{currency_name}}",
     "refs_stats": f"{ce('statistics')} Referral stats\n├ Regular: +{{regular}}\n├ Premium: +{{premium}}\n├ OP: +{{op}}\n├ Deposits: {{deposit_percent}}%\n└ Tasks: {{task_percent}}%",
     "levels": f"{ce('levels')} Levels\n\n• Current: {{level_name}}\n• XP: {{xp}}\n• Next in: {{xp_left}}\n\n{{levels_table}}",
-    "xp_help": "XP is earned from tasks, referrals and balance top-ups.",
+    "xp_help": (
+        "XP is earned from tasks, referrals and balance top-ups.\n\n"
+        "For each completed task, XP matches the task reward: "
+        "a 750 GRAM task gives 750 XP, a 1 400 GRAM task gives 1 400 XP."
+    ),
     "notifications_on": "Notifications enabled.",
     "notifications_off": "Notifications disabled.",
     "advertise": f"{ce('ads')} Ad cabinet {{project_name}}\n\n{ce('balance')} Balance: {{balance}} {{currency_name}}\n\nChoose what to promote. I will show the price and ask for confirmation before launch.",

@@ -5,6 +5,7 @@ from decimal import Decimal, InvalidOperation
 from html import escape
 
 from aiogram import F, Router
+from aiogram.enums import ChatMemberStatus
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message, ReplyKeyboardRemove
@@ -339,6 +340,22 @@ def chat_target_url(chat_shared) -> str:
     if username:
         return f"https://t.me/{username}"
     return f"tg://resolve?domain={chat_shared.chat_id}"
+
+
+async def bot_is_chat_admin(bot, chat_id: int | str) -> bool:
+    try:
+        me = await bot.get_me()
+        member = await bot.get_chat_member(chat_id, me.id)
+    except (TelegramBadRequest, TelegramForbiddenError):
+        return False
+    return member.status in {ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.CREATOR}
+
+
+def bot_admin_required_text(target_kind: str = "чате") -> str:
+    return (
+        f"Бот должен быть администратором в этом {target_kind}, иначе он не сможет проверить выполнение задания.\n\n"
+        "Добавьте бота администратором и выберите чат ещё раз."
+    )
 
 
 async def safe_edit_text(message: Message, text: str, reply_markup=None) -> None:
@@ -1082,7 +1099,7 @@ async def ad_bot_conditions(message: Message, state: FSMContext) -> None:
 
 
 @router.message(CreateTask.waiting_chat_target, F.chat_shared)
-async def ad_chat_target(message: Message, session: AsyncSession, state: FSMContext) -> None:
+async def ad_chat_target(message: Message, session: AsyncSession, state: FSMContext, bot) -> None:
     settings = get_settings()
     user = await current_user(message, session)
     data = await state.get_data()
@@ -1094,6 +1111,10 @@ async def ad_chat_target(message: Message, session: AsyncSession, state: FSMCont
     expected_request = REQUEST_CHANNEL_ID if task_type == TaskType.CHANNEL.value else REQUEST_GROUP_ID
     if chat_shared.request_id != expected_request:
         await message.answer("Выберите подходящий тип: канал для рекламы канала или группу для рекламы группы.")
+        return
+    if not await bot_is_chat_admin(bot, chat_shared.chat_id):
+        target_kind = "канале" if task_type == TaskType.CHANNEL.value else "группе"
+        await message.answer(bot_admin_required_text(target_kind), reply_markup=ReplyKeyboardRemove())
         return
     target_url = chat_target_url(chat_shared)
     meta = data.get("meta", {})
@@ -1621,14 +1642,28 @@ async def ad_boost_link(message: Message, session: AsyncSession, state: FSMConte
     target_url = normalize_target_url(boost_url)
     target_chat_id = None
     username = boost_username_from_url(target_url)
-    if username:
-        try:
-            chat = await bot.get_chat(f"@{username}")
-            target_chat_id = str(chat.id)
-            meta["boost_target_title"] = chat.title or username
-            meta["boost_target_username"] = username
-        except (TelegramBadRequest, TelegramForbiddenError):
-            meta["boost_target_username"] = username
+    if not username:
+        await message.answer("Ссылка на Boost выглядит некорректно. Отправьте ссылку вида https://t.me/boost/username.")
+        return
+    try:
+        chat = await bot.get_chat(f"@{username}")
+        if not await bot_is_chat_admin(bot, chat.id):
+            bot_info = await bot.get_me()
+            await message.answer(
+                bot_admin_required_text("канале/группе"),
+                reply_markup=boost_admin_inline_keyboard(bot_info.username),
+            )
+            return
+        target_chat_id = str(chat.id)
+        meta["boost_target_title"] = chat.title or username
+        meta["boost_target_username"] = username
+    except (TelegramBadRequest, TelegramForbiddenError):
+        bot_info = await bot.get_me()
+        await message.answer(
+            bot_admin_required_text("канале/группе"),
+            reply_markup=boost_admin_inline_keyboard(bot_info.username),
+        )
+        return
     meta["boost_url"] = target_url
     await state.update_data(
         target_url=target_url,
@@ -1654,11 +1689,14 @@ async def ad_boost_link(message: Message, session: AsyncSession, state: FSMConte
 
 
 @router.message(CreateTask.waiting_boost_link, F.chat_shared)
-async def ad_boost_admin_chat_selected(message: Message, session: AsyncSession, state: FSMContext) -> None:
+async def ad_boost_admin_chat_selected(message: Message, session: AsyncSession, state: FSMContext, bot) -> None:
     await current_user(message, session)
     chat_shared = message.chat_shared
     if not chat_shared or chat_shared.request_id not in {REQUEST_BOOST_ADMIN_CHANNEL_ID, REQUEST_BOOST_ADMIN_GROUP_ID}:
         await message.answer("Выберите канал или группу через кнопку добавления бота.")
+        return
+    if not await bot_is_chat_admin(bot, chat_shared.chat_id):
+        await message.answer(bot_admin_required_text("канале/группе"), reply_markup=ReplyKeyboardRemove())
         return
     data = await state.get_data()
     meta = data.get("meta", {})

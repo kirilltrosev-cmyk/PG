@@ -63,6 +63,22 @@ def clean_chat_id(value: str) -> str:
     return value.strip().removeprefix("https://t.me/").removeprefix("http://t.me/").removeprefix("t.me/")
 
 
+async def bot_is_chat_admin(bot, chat_id: int | str) -> bool:
+    try:
+        me = await bot.get_me()
+        member = await bot.get_chat_member(chat_id, me.id)
+    except (TelegramBadRequest, TelegramForbiddenError):
+        return False
+    return member.status in {ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.CREATOR}
+
+
+def op_bot_admin_required_text(target_kind: str = "чате") -> str:
+    return (
+        f"Бот должен быть администратором в этом {target_kind}, иначе проверка подписки не сможет работать корректно.\n\n"
+        "Добавьте бота администратором и повторите действие."
+    )
+
+
 async def show_main(target: Message | CallbackQuery, session: AsyncSession) -> None:
     settings = get_settings()
     user = await current_user(target, session)
@@ -148,7 +164,7 @@ async def op_main(callback: CallbackQuery, session: AsyncSession, state: FSMCont
 async def remember_group(event: ChatMemberUpdated, session: AsyncSession) -> None:
     if event.chat.type not in {"group", "supergroup"}:
         return
-    if event.new_chat_member.status in {ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR}:
+    if event.new_chat_member.status in {ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.CREATOR}:
         owner = await current_user(event, session)
         await upsert_group(session, owner, str(event.chat.id), event.chat.title or str(event.chat.id))
 
@@ -226,16 +242,10 @@ async def op_channel_save(message: Message, session: AsyncSession, state: FSMCon
     except (TelegramBadRequest, TelegramForbiddenError):
         await message.answer(t(user.language, "op_channel_bad"))
         return
-    if chat.type == "channel":
-        try:
-            me = await bot.get_me()
-            member = await bot.get_chat_member(chat.id, me.id)
-        except (TelegramBadRequest, TelegramForbiddenError):
-            await message.answer(t(user.language, "op_channel_bad"))
-            return
-        if member.status not in {ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.CREATOR}:
-            await message.answer(t(user.language, "op_channel_bad"))
-            return
+    if not await bot_is_chat_admin(bot, chat.id):
+        target_kind = "канале" if chat.type == "channel" else "группе"
+        await message.answer(op_bot_admin_required_text(target_kind))
+        return
     await add_required_channel(session, group, str(chat.id), chat.title or chat.username or str(chat.id), f"https://t.me/{chat.username}" if chat.username else str(chat.id))
     await state.clear()
     await message.answer("Канал добавлен в обязательные условия.")
@@ -655,8 +665,11 @@ async def group_op_command(message: Message, session: AsyncSession) -> None:
 
 
 @router.message(Command("reload"), F.chat.type.in_({"group", "supergroup"}))
-async def group_reload_command(message: Message, session: AsyncSession) -> None:
+async def group_reload_command(message: Message, session: AsyncSession, bot) -> None:
     if not message.from_user:
+        return
+    if not await bot_is_chat_admin(bot, message.chat.id):
+        await message.answer(op_bot_admin_required_text("группе"))
         return
     owner = await current_user(message, session)
     await upsert_group(session, owner, str(message.chat.id), message.chat.title or str(message.chat.id))

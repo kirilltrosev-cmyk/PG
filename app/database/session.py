@@ -19,6 +19,7 @@ async def init_db() -> None:
             await _ensure_sqlite_test_columns(conn)
             await _ensure_sqlite_user_columns(conn)
             await _ensure_sqlite_payment_columns(conn)
+            await _ensure_sqlite_check_columns(conn)
 
 
 async def _ensure_sqlite_test_columns(conn) -> None:
@@ -62,6 +63,17 @@ async def _ensure_sqlite_payment_columns(conn) -> None:
     for column, ddl in payment_columns.items():
         if column not in existing:
             await conn.exec_driver_sql(f"ALTER TABLE payments ADD COLUMN {ddl}")
+
+
+async def _ensure_sqlite_check_columns(conn) -> None:
+    check_columns = {
+        "created_at": "created_at VARCHAR(64)",
+    }
+    result = await conn.exec_driver_sql("PRAGMA table_info(checks)")
+    existing = {row[1] for row in result.fetchall()}
+    for column, ddl in check_columns.items():
+        if column not in existing:
+            await conn.exec_driver_sql(f"ALTER TABLE checks ADD COLUMN {ddl}")
 
 
 async def get_session() -> AsyncIterator[AsyncSession]:

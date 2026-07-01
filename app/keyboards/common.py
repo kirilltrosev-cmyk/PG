@@ -859,7 +859,33 @@ def my_task_detail_keyboard(task_id: int, status: str, source: str = "ads") -> I
 def checks_keyboard() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     add_button(builder, "Создать чек", callback_data="check:create", emoji_name="checks")
+    add_button(builder, "Мои чеки", callback_data="check:list", emoji_name="statistics")
     add_button(builder, "Активировать чек", callback_data="check:activate", emoji_name="confirm")
+    builder.adjust(1)
+    return builder.as_markup()
+
+
+def check_list_keyboard(checks) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    for check in checks:
+        left = max(check.activations_limit - check.activations_count, 0)
+        add_button(
+            builder,
+            f"Чек #{check.id}: {check.activations_count}/{check.activations_limit}, осталось {left}",
+            callback_data=f"check:view:{check.id}",
+            emoji_name="checks",
+        )
+    add_button(builder, "Обновить", callback_data="check:list", emoji_name="refresh")
+    add_button(builder, "Назад", callback_data="menu:checks", emoji_name="back")
+    builder.adjust(1)
+    return builder.as_markup()
+
+
+def check_detail_keyboard(check_id: int) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    add_button(builder, "Обновить", callback_data=f"check:view:{check_id}", emoji_name="refresh")
+    add_button(builder, "К моим чекам", callback_data="check:list", emoji_name="checks")
+    add_button(builder, "Назад", callback_data="menu:checks", emoji_name="back")
     builder.adjust(1)
     return builder.as_markup()
 

@@ -2,7 +2,7 @@ from datetime import datetime
 from decimal import Decimal
 from secrets import token_urlsafe
 
-from sqlalchemy import select
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.finance import Check, CheckActivation, Payment
@@ -78,10 +78,27 @@ async def create_check(session: AsyncSession, user: User, amount_per_user: Decim
         amount_total=total,
         amount_per_user=amount_per_user,
         activations_limit=limit,
+        created_at=datetime.utcnow().isoformat(timespec="seconds"),
     )
     session.add(check)
     await session.flush()
     return check
+
+
+async def list_user_checks(session: AsyncSession, user: User, limit: int = 20) -> list[Check]:
+    result = await session.execute(
+        select(Check)
+        .where(Check.creator_id == user.id)
+        .order_by(desc(Check.id))
+        .limit(limit)
+    )
+    return list(result.scalars().all())
+
+
+async def get_user_check(session: AsyncSession, user: User, check_id: int) -> Check | None:
+    return await session.scalar(
+        select(Check).where(Check.id == check_id, Check.creator_id == user.id)
+    )
 
 
 async def activate_check(session: AsyncSession, token: str, user: User) -> str:
